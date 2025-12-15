@@ -26,14 +26,37 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Your logic here, e.g., call your AI or Gemini API
+    const url = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${apiKey}`;
 
-    // For demonstration, echo the prompt:
-    const reply = `You sent: ${prompt}`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+      }),
+    });
 
-    res.status(200).json({ reply });
-  } catch (error) {
-    console.error("Chat handler error:", error);
-    res.status(500).json({ error: "Internal server error." });
+    if (!response.ok) {
+      const errText = await response.text();
+      res.status(response.status).json({
+        error: "Gemini API error",
+        details: errText,
+      });
+      return;
+    }
+
+    const data = await response.json();
+
+    const text =
+      data?.candidates?.[0]?.content?.parts
+        ?.map((p) => p.text || "")
+        .join("") || "";
+
+    res.status(200).json({ text, raw: data });
+  } catch (err) {
+    res.status(500).json({
+      error: "Internal server error calling Gemini",
+      details: err.message,
+    });
   }
 }
