@@ -1,64 +1,36 @@
 // api/chat.js
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
 
-  if (req.method === "OPTIONS") return res.status(200).end();
-  if (req.method !== "POST") return res.status(405).end();
+  const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+  if (!GEMINI_API_KEY) {
+    return res.status(500).json({ error: "Missing Gemini API key" });
+  }
 
-  const { prompt } = req.body;
-  if (!prompt) return res.status(400).json({ error: "Missing prompt" });
+  const { message } = req.body;
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: "Missing API key" });
+  if (!message) {
+    return res.status(400).json({ error: "Message is required" });
+  }
 
-  const geminiRes = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:streamGenerateContent?key=${apiKey}`,
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-      }),
+        contents: [{ parts: [{ text: message }] }]
+      })
     }
   );
 
-  if (!geminiRes.body) return res.status(500).end();
+  const data = await response.json();
 
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
-    Connection: "keep-alive",
+  res.status(200).json({
+    reply:
+      data.candidates?.[0]?.content?.parts?.[0]?.text ??
+      "No response"
   });
-
-  const reader = geminiRes.body.getReader();
-  const decoder = new TextDecoder();
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    const chunk = decoder.decode(value, { stream: true });
-
-    // Gemini sends JSON per chunk
-    for (const line of chunk.split("\n")) {
-      if (!line.trim()) continue;
-
-      try {
-        const json = JSON.parse(line);
-        const text =
-          json.candidates?.[0]?.content?.parts?.[0]?.text;
-
-        if (text) {
-          res.write(`data: ${text}\n\n`);
-        }
-      } catch {
-        // ignore malformed partial lines
-      }
-    }
-  }
-
-  res.write(`event: end\ndata: [DONE]\n\n`);
-  res.end();
 }
