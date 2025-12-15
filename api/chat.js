@@ -1,5 +1,3 @@
-// api/chat.js
-
 export default async function handler(req, res) {
   // --- CORS: ALLOW ALL ORIGINS ---
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -19,7 +17,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { prompt, model = "models/gemini-2.5-flash-preview-09-2025" } = req.body || {};
+  const { prompt, model = "gemini-pro" } = req.body || {};
 
   if (!prompt) {
     res.status(400).json({ error: "Missing 'prompt' in request body." });
@@ -35,7 +33,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const response = await fetch(url, {
       method: "POST",
@@ -47,6 +45,7 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const errText = await response.text();
+      console.error("Gemini API error:", errText);
       res.status(response.status).json({
         error: "Gemini API error",
         details: errText,
@@ -55,14 +54,14 @@ export default async function handler(req, res) {
     }
 
     const data = await response.json();
+    console.log("Gemini API response:", JSON.stringify(data, null, 2));
 
-    const text =
-      data?.candidates?.[0]?.content?.parts
-        ?.map((p) => p.text || "")
-        .join("") || "";
+    // Updated to handle the actual response structure
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     res.status(200).json({ text, raw: data });
   } catch (err) {
+    console.error("Error calling Gemini:", err);
     res.status(500).json({
       error: "Internal server error calling Gemini",
       details: err.message,
