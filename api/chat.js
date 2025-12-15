@@ -1,42 +1,52 @@
 export default async function handler(req, res) {
-  // Set CORS headers on all responses
-  res.setHeader('Access-Control-Allow-Origin', 'https://omar-shandaq.github.io'); // Adjust to your frontend origin
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  // Handle preflight OPTIONS request
   if (req.method === 'OPTIONS') {
-    // Respond with no content for preflight
-    return res.status(204).end();
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin': 'https://omar-shandaq.github.io',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    });
+    return res.end();
   }
 
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+  if (req.method !== 'POST') {
+    res.writeHead(405, {
+      'Access-Control-Allow-Origin': 'https://omar-shandaq.github.io',
+    });
+    return res.end(JSON.stringify({ error: 'Method not allowed' }));
   }
 
   const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
   if (!GEMINI_API_KEY) {
-    return res.status(500).json({ error: "Missing Gemini API key" });
+    res.writeHead(500, {
+      'Access-Control-Allow-Origin': 'https://omar-shandaq.github.io',
+      'Content-Type': 'application/json',
+    });
+    return res.end(JSON.stringify({ error: 'Missing Gemini API key' }));
   }
 
   const { message } = req.body;
   if (!message) {
-    return res.status(400).json({ error: "Message is required" });
+    res.writeHead(400, {
+      'Access-Control-Allow-Origin': 'https://omar-shandaq.github.io',
+      'Content-Type': 'application/json',
+    });
+    return res.end(JSON.stringify({ error: 'Message is required' }));
   }
 
-  // Set SSE headers for streaming
+  // Set SSE headers along with CORS headers
   res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
-    Connection: "keep-alive",
+    'Access-Control-Allow-Origin': 'https://omar-shandaq.github.io',
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
   });
 
   try {
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:streamGenerateContent?key=${GEMINI_API_KEY}`,
       {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: message }] }],
         }),
@@ -56,8 +66,6 @@ export default async function handler(req, res) {
       if (done) break;
 
       const chunk = decoder.decode(value);
-
-      // Stream each chunk as an SSE event
       res.write(`data: ${chunk}\n\n`);
     }
 
