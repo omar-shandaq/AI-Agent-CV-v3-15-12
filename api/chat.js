@@ -78,7 +78,7 @@ export default async function handler(req, res) {
           const data = JSON.parse(line);
           const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
           if (text) {
-            // Send the text as SSE data
+            // Send the text as SSE
             res.write(`data: ${JSON.stringify({ text })}\n\n`);
           }
         } catch (e) {
