@@ -1,7 +1,7 @@
 export default async function handler(req, res) {
-  // CORS headers - allow your frontend origin here
-  const ALLOWED_ORIGIN = "https://omar-shandaq.github.io";
-
+  // Set CORS headers immediately at the beginning
+  const ALLOWED_ORIGIN = "*";
+  
   res.setHeader("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
@@ -9,38 +9,38 @@ export default async function handler(req, res) {
 
   // Handle preflight OPTIONS request early
   if (req.method === "OPTIONS") {
-    return res.status(204).end();
+    return res.status(200).end();
   }
-
-  // Only POST allowed
-  if (req.method !== "POST") {
-    res.statusCode = 405;
-    res.setHeader("Content-Type", "application/json");
-    return res.end(JSON.stringify({ error: "Method not allowed" }));
-  }
-
-  const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-  if (!GEMINI_API_KEY) {
-    res.statusCode = 500;
-    res.setHeader("Content-Type", "application/json");
-    return res.end(JSON.stringify({ error: "Missing Gemini API key" }));
-  }
-
-  const { message } = req.body || {};
-  if (!message) {
-    res.statusCode = 400;
-    res.setHeader("Content-Type", "application/json");
-    return res.end(JSON.stringify({ error: "Message is required" }));
-  }
-
-  // SSE headers
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
-    Connection: "keep-alive",
-  });
 
   try {
+    // Only POST allowed
+    if (req.method !== "POST") {
+      res.statusCode = 405;
+      res.setHeader("Content-Type", "application/json");
+      return res.end(JSON.stringify({ error: "Method not allowed" }));
+    }
+
+    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+    if (!GEMINI_API_KEY) {
+      res.statusCode = 500;
+      res.setHeader("Content-Type", "application/json");
+      return res.end(JSON.stringify({ error: "Missing Gemini API key" }));
+    }
+
+    const { message } = req.body || {};
+    if (!message) {
+      res.statusCode = 400;
+      res.setHeader("Content-Type", "application/json");
+      return res.end(JSON.stringify({ error: "Message is required" }));
+    }
+
+    // SSE headers
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    });
+
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:streamGenerateContent?key=${GEMINI_API_KEY}`,
       {
@@ -78,6 +78,8 @@ export default async function handler(req, res) {
 
     res.end();
   } catch (err) {
+    // Ensure CORS headers are set even in error cases
+    res.setHeader("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
     res.write(`data: ${JSON.stringify({ error: "Internal server error", details: err.message })}\n\n`);
     res.end();
   }
