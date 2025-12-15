@@ -1,71 +1,77 @@
-// api/gemini-proxy.js
+// /api/chat.js
 
-export default async function handler(req, res) {
-  // --- CORS: ALLOW ALL ORIGINS ---
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Access-Control-Allow-Credentials", "false");
+export const config = {
+  runtime: "edge",
+};
 
-  // Preflight
+export default async function handler(req) {
+  // --- CORS ---
   if (req.method === "OPTIONS") {
-    res.status(200).end();
-    return;
+    return new Response(null, {
+      status: 200,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+      },
+    });
   }
 
-  // Only allow POST for actual usage
   if (req.method !== "POST") {
-    res.status(405).json({ error: "Method not allowed. Use POST." });
-    return;
+    return new Response("Method Not Allowed", { status: 405 });
   }
 
-  const { prompt, model = "models/gemini-2.5-flash-preview-09-2025" } = req.body || {};
+  // --- BODY ---
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return new Response("Invalid JSON body", { status: 400 });
+  }
+
+  const {
+    prompt,
+    model = "models/gemini-1.5-flash",
+  } = body || {};
 
   if (!prompt) {
-    res.status(400).json({ error: "Missing 'prompt' in request body." });
-    return;
+    return new Response("Missing 'prompt'", { status: 400 });
   }
 
+  // --- ENV ---
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    res.status(500).json({
-      error: "Server is missing GEMINI_API_KEY environment variable.",
-    });
-    return;
+    return new Response("Missing GEMINI_API_KEY", { status: 500 });
   }
 
-  try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${apiKey}`;
+  // --- GEMINI STREAM ENDPOINT ---
+  const url = `https://generativelanguage.googleapis.com/v1beta/${model}:streamGenerateContent?key=${apiKey}`;
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-      }),
-    });
+  const geminiRes = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      contents: [
+        {
+          parts: [{ text: prompt }],
+        },
+      ],
+    }),
+  });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      res.status(response.status).json({
-        error: "Gemini API error",
-        details: errText,
-      });
-      return;
-    }
-
-    const data = await response.json();
-
-    const text =
-      data?.candidates?.[0]?.content?.parts
-        ?.map((p) => p.text || "")
-        .join("") || "";
-
-    res.status(200).json({ text, raw: data });
-  } catch (err) {
-    res.status(500).json({
-      error: "Internal server error calling Gemini",
-      details: err.message,
-    });
+  if (!geminiRes.ok || !geminiRes.body) {
+    return new Response("Gemini API streaming error", { status: 500 });
   }
+
+  // --- STREAM PASSTHROUGH ---
+  return new Response(geminiRes.body, {
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+      "Cache-Control": "no-cache",
+    },
+  });
 }
+
