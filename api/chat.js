@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   if (!prompt) return res.status(400).json({ error: "Missing prompt" });
 
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return res.status(500).end();
+  if (!apiKey) return res.status(500).json({ error: "Missing API key" });
 
   const geminiRes = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:streamGenerateContent?key=${apiKey}`,
@@ -24,6 +24,8 @@ export default async function handler(req, res) {
     }
   );
 
+  if (!geminiRes.body) return res.status(500).end();
+
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
@@ -32,18 +34,15 @@ export default async function handler(req, res) {
 
   const reader = geminiRes.body.getReader();
   const decoder = new TextDecoder();
-  let buffer = "";
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
 
-    buffer += decoder.decode(value, { stream: true });
+    const chunk = decoder.decode(value, { stream: true });
 
-    const lines = buffer.split("\n");
-    buffer = lines.pop();
-
-    for (const line of lines) {
+    // Gemini sends JSON per chunk
+    for (const line of chunk.split("\n")) {
       if (!line.trim()) continue;
 
       try {
@@ -55,7 +54,7 @@ export default async function handler(req, res) {
           res.write(`data: ${text}\n\n`);
         }
       } catch {
-        // ignore malformed chunks
+        // ignore malformed partial lines
       }
     }
   }
