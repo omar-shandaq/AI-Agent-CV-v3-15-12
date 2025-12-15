@@ -1,4 +1,15 @@
 export default async function handler(req, res) {
+  // Set CORS headers on all responses
+  res.setHeader('Access-Control-Allow-Origin', 'https://omar-shandaq.github.io'); // Adjust to your frontend origin
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  // Handle preflight OPTIONS request
+  if (req.method === 'OPTIONS') {
+    // Respond with no content for preflight
+    return res.status(204).end();
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
