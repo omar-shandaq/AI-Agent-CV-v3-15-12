@@ -1,27 +1,36 @@
 // api/chat.js
 
 export default async function handler(req, res) {
-  const allowedOrigin = req.headers.origin || "*";
-
-  // Set CORS headers for all requests
-  res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  // --- CORS: ALLOW ALL ORIGINS ---
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Credentials", "false");
 
-  // Handle preflight requests
+  // Preflight
   if (req.method === "OPTIONS") {
-    res.status(204).end();
+    res.status(200).end();
     return;
   }
 
+  // Only allow POST for actual usage
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed. Use POST." });
     return;
   }
 
-  const { prompt } = req.body || {};
+  const { prompt, model = "models/gemini-2.5-flash-preview-09-2025" } = req.body || {};
+
   if (!prompt) {
     res.status(400).json({ error: "Missing 'prompt' in request body." });
+    return;
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    res.status(500).json({
+      error: "Server is missing GEMINI_API_KEY environment variable.",
+    });
     return;
   }
 
