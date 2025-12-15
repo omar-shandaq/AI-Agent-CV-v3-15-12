@@ -1,4 +1,4 @@
-// api/gemini-proxy.js
+// api/chat.js
 
 export default async function handler(req, res) {
   // --- CORS: ALLOW ALL ORIGINS ---
